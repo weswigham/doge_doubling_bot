@@ -24,11 +24,11 @@ def main(username, password, dis):
     if est_bal < 5:
         print("I only have Ð"+str(est_bal)+", but need at LEAST 5 to tip. Goodbye.")
         print("Tip +/u/"+username+" to fill up.")
-        return
+        raise Exception('Not enough doge!')
         
     print('My starting balance today is Ð'+str(est_bal)+', time to spend!')
     
-    r = praw.Reddit('much_doge_tip_doubler_very_wow')
+    r = praw.Reddit('doge_doubling_bot/0.2 by levy')
     r.login(username, password)
     dogetipbot = r.get_redditor('dogetipbot')
     
@@ -44,7 +44,7 @@ def main(username, password, dis):
             if (not place) or (place <= 0): 
                 continue
             
-            match = reg.match(text[place:])
+            match = reg.search(text[place:])
             if not match: #Did we match a number?
                 print('No Match: ', text)
                 continue
@@ -103,15 +103,50 @@ def main(username, password, dis):
         if DEBUG_ONCE:
             break
         print('Sleeping for 5 minutes before the next run.')
+        dis.save()
         time.sleep(5*60);
 
-import codecs
+def rebuild_database(username, password, dis):
+    r = praw.Reddit('much_doge_tip_doubler_very_wow')
+    r.login(username, password)
+    me = r.get_redditor(username)
+    coms = me.get_comments(sort='new', limit=None) #Build backwards
+    reg = re.compile('\[\^was \^caused\]\((.*)\)')
+    balreg = re.compile('\+\/u\/dogetipbot (.*) doge verify')
+    
+    print('Finding missing entries...')
+    total = 0
+    count = 0
+    for c in coms:
+        txt = c.body
+        link = reg.search(txt)
+        if not link:
+            print('link not found...')
+            continue
+        permalink = link.group(1)
+        amt = balreg.search(txt)
+        if not amt:
+            print('transaction amount not found...')
+            continue
+        if not dis.get(permalink):
+            num = float(amt.group(1))
+            dis.set(permalink, num)
+            print('Added Ð'+str(num)+' comment from date '+str(c.created))
+            count += 1
+            total += num
+    
+    print('Making redis save...')    
+    dis.save() # Just in case!
+    print('Done resynchronizing! Re-added Ð'+str(total)+' across '+str(count)+' comments!')
         
 if __name__ == '__main__':
     if len(sys.argv) < 5:
-        print('expecting: username password redishost redisport')
+        print('expecting: username password redishost redisport [\'rebuild\']')
         sys.ext(0)
-     
+    
+    if sys.argv[5] and sys.argv[5]=='rebuild':
+        rebuild_database(sys.argv[1], sys.argv[2], redis.StrictRedis(host=sys.argv[3], port=sys.argv[4], db=0))
+    
     while True:
         try: 
             main(sys.argv[1], sys.argv[2], redis.StrictRedis(host=sys.argv[3], port=sys.argv[4], db=0))
