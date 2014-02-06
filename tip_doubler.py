@@ -144,7 +144,7 @@ if __name__ == '__main__':
         print('expecting: username password redishost redisport [\'rebuild\']')
         sys.ext(0)
     
-    if sys.argv[5] and sys.argv[5]=='rebuild':
+    if len(sys.argv) > 5 and sys.argv[5]=='rebuild':
         rebuild_database(sys.argv[1], sys.argv[2], redis.StrictRedis(host=sys.argv[3], port=sys.argv[4], db=0))
     
     while True:
