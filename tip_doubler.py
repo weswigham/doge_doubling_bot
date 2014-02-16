@@ -18,6 +18,27 @@ def handle_ratelimit(func, *args, **kwargs):
             logging.debug('\tSleeping for %d seconds' % error.sleep_time)
             time.sleep(error.sleep_time)
 
+pending_cushion = 50
+findbal = re.compile('Your current balance is: ([0-9]+[.0-9]*) dogecoins')            
+def update_bal(r, dis):
+    r.send_message('dogetipbot', '+history', '+history')
+    while True:
+        mes = r.get_unread(limit=None)
+        for m in mes:
+            m.mark_as_read()
+            if m.author == 'dogetipbot' and m.subject == '+history':
+                match = findbal.search(m.body)
+                logging.debug('Got reply from dogetipbot with +history!')
+                if match and match.group(1):
+                    bal = float(match.group(1))
+                    if bal <= pending_cushion: #Keep enough for pending tips mayhaps
+                        logging.debug('Balance super, super low. For real. :( No more tips.')
+                        dis.set('bal', 0)
+                    else:
+                        logging.debug('Balance is '+str(bal)+', so I can do some tipping!')
+                        dis.set('bal', bal-pending_cushion)
+                return
+
 DEBUG_ONCE = False
 
 karma_curve = [22, 8, 3, 1]
@@ -33,18 +54,20 @@ banned = ['starcraft', 'news', 'Bitcoin']
 conditionally_removed = ['DogeCoinPIF', 'DogeTippingWars', 'DogeTrain']
             
 def main(username, password, dis):
-
-    est_bal = float(dis.get('bal'))
-    if est_bal < 5:
-        logging.debug("I only have Ð"+str(est_bal)+", but need at LEAST 5 to tip. Goodbye.")
-        logging.debug("Tip +/u/"+username+" to fill up.")
-        raise Exception('Not enough doge!')
-        
-    logging.debug('My starting balance today is Ð'+str(est_bal)+', time to spend!')
     
     r = praw.Reddit('doge_doubling_bot/0.2 by levy')
     r.login(username, password)
     dogetipbot = r.get_redditor('dogetipbot')
+    
+    est_bal = float(dis.get('bal'))
+    if est_bal < 5:
+        logging.debug("I only have Ð"+str(est_bal)+", but need at LEAST 5 to tip. Checking in with /u/dogetipbot (this could take awhile).")
+        logging.debug("Tip +/u/"+username+" to fill up.")
+        update_bal(r, dis)
+        if float(dis.get('bal')) < 5:
+            raise Exception('Not enough doge!')
+        
+    logging.debug('My starting balance today is Ð'+str(dis.get('bal'))+', time to spend!')
     
     while float(dis.get('bal')) >= 5:
         
